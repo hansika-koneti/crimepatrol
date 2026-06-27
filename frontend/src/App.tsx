@@ -1,122 +1,87 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { Suspense, lazy } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useAppStore } from '@/store'
+import Sidebar from '@/components/layout/Sidebar'
+import TopBar from '@/components/layout/TopBar'
+import { useWebSocket } from '@/hooks/useWebSocket'
 
-function App() {
-  const [count, setCount] = useState(0)
+// Lazy-loaded pages for code splitting
+const LoginPage     = lazy(() => import('@/pages/LoginPage'))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const MapPage       = lazy(() => import('@/pages/MapPage'))
+const PredictPage   = lazy(() => import('@/pages/PredictPage'))
+const ReportsPage   = lazy(() => import('@/pages/ReportsPage'))
+const HealthPage    = lazy(() => import('@/pages/HealthPage'))
 
+// ─── Page loader spinner ───────────────────────────────────────────────────────
+function PageLoader() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: '100vh', background: 'var(--color-bg-primary)',
+    }}>
+      <div style={{
+        width: 40, height: 40, border: '3px solid var(--color-border)',
+        borderTopColor: 'var(--color-accent)', borderRadius: '50%',
+        animation: 'spin 0.7s linear infinite',
+      }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   )
 }
 
-export default App
+// ─── Protected Route ──────────────────────────────────────────────────────────
+function RequireAuth() {
+  const isAuthenticated = useAppStore(s => s.isAuthenticated)
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  return <AppShell />
+}
+
+// ─── Main App Shell (sidebar + content area) ──────────────────────────────────
+function AppShell() {
+  const sidebarCollapsed = useAppStore(s => s.sidebarCollapsed)
+  useWebSocket()   // establish live WS connection once authenticated
+
+  const sidebarW = sidebarCollapsed ? 64 : 220
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
+      <Sidebar />
+      <div style={{
+        flex: 1,
+        marginLeft: sidebarW,
+        transition: 'margin-left 0.3s cubic-bezier(0.4,0,0.2,1)',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+        overflow: 'hidden',
+      }}>
+        <TopBar />
+        <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  )
+}
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<RequireAuth />}>
+            <Route path="/"        element={<DashboardPage />} />
+            <Route path="/map"     element={<MapPage />} />
+            <Route path="/predict" element={<PredictPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/health"  element={<HealthPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  )
+}
