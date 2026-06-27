@@ -1,0 +1,125 @@
+name: CrimePatrol CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Backend Lint + Test ────────────────────────────────────────────────────
+  backend:
+    name: Backend — Lint & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: crimepatrol_test
+          POSTGRES_USER: crimepatrol
+          POSTGRES_PASSWORD: crimepatrol_secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.2-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: development
+      APP_SECRET_KEY: ci-secret-key-for-testing-only-32chars
+      DATABASE_URL: postgresql+asyncpg://crimepatrol:crimepatrol_secret@localhost:5432/crimepatrol_test
+      REDIS_URL: redis://localhost:6379/0
+      GEMINI_API_KEY: ""
+      TOMTOM_API_KEY: ""
+      TICKETMASTER_API_KEY: ""
+      CITY_ADAPTER: chicago
+      CITY_NAME: Chicago
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev gdal-bin libgdal-dev
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint with Ruff
+        run: |
+          cd backend
+          ruff check . --output-format=github
+
+      - name: Type check with MyPy
+        run: |
+          cd backend
+          mypy backend/core backend/domain --ignore-missing-imports
+        continue-on-error: true   # Non-blocking for now
+
+      - name: Run tests
+        run: |
+          cd backend
+          pytest tests/ -v --cov=backend --cov-report=xml --tb=short
+        env:
+          PYTHONPATH: .
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: backend/coverage.xml
+        continue-on-error: true
+
+  # ─── Frontend Build ─────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Type check
+        run: |
+          cd frontend
+          npm run type-check
+        continue-on-error: true
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+        env:
+          VITE_API_BASE_URL: https://crimepatrol-api.onrender.com/api/v1
+          VITE_WS_URL: wss://crimepatrol-api.onrender.com/ws
