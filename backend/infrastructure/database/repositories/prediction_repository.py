@@ -14,8 +14,10 @@ from backend.infrastructure.database.models.all_models import PredictionModel
 
 
 def _to_entity(m: PredictionModel) -> Prediction:
+    raw_features = m.top_features or []
     top_features = [
-        TopFeature(**f) for f in (m.top_features or [])
+        TopFeature(**f) if isinstance(f, dict) else TopFeature(feature=f, contribution=0.0, direction="positive")
+        for f in raw_features
     ]
     similar_cases = [
         SimilarCase(
@@ -127,13 +129,16 @@ class SQLPredictionRepository(PredictionRepository):
         self, city: str, window_start: datetime, top_n: int = 10
     ) -> list[Prediction]:
         from backend.infrastructure.database.models.all_models import AreaModel
+        from datetime import timedelta
+        # Look back 24 hours to find recent high-risk predictions
+        lookback = window_start - timedelta(hours=24)
         stmt = (
             select(PredictionModel)
             .join(AreaModel, PredictionModel.area_id == AreaModel.id)
             .where(
                 and_(
                     AreaModel.city == city,
-                    PredictionModel.predicted_for >= window_start,
+                    PredictionModel.predicted_for >= lookback,
                     PredictionModel.risk_level.in_(["HIGH", "CRITICAL"]),
                 )
             )

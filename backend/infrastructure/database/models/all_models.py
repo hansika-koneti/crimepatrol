@@ -27,6 +27,17 @@ from sqlalchemy.sql import func
 
 from backend.infrastructure.database.connection import Base
 
+# PostgreSQL enum types that already exist in the DB — create_type=False
+# prevents SQLAlchemy from trying to CREATE TYPE on startup.
+RiskLevelEnum = Enum(
+    "LOW", "MEDIUM", "HIGH", "CRITICAL",
+    name="risk_level_enum", create_type=False
+)
+DataSourceEnum = Enum(
+    "historical_csv", "scraper", "api", "manual",
+    name="data_source_enum", create_type=False
+)
+
 
 class AreaModel(Base):
     __tablename__ = "areas"
@@ -62,7 +73,7 @@ class CrimeIncidentModel(Base):
     address = Column(Text)
     occurred_at = Column(DateTime(timezone=True), nullable=False)
     reported_at = Column(DateTime(timezone=True))
-    source = Column(Text, nullable=False)
+    source = Column(DataSourceEnum, nullable=False)
     source_url = Column(Text)
     source_id = Column(Text)
     raw_text = Column(Text)
@@ -126,7 +137,7 @@ class PredictionModel(Base):
     predicted_for = Column(DateTime(timezone=True), nullable=False)
     window_hours = Column(SmallInteger, nullable=False, default=3)
     risk_score = Column(Float)
-    risk_level = Column(Text, nullable=False)
+    risk_level = Column(RiskLevelEnum, nullable=False)
     crime_type = Column(Text)
     confidence = Column(Float)
     probability_dist = Column(JSONB)
@@ -277,7 +288,7 @@ class DailyBriefingModel(Base):
     highest_risk_area = Column(Text)
     highest_risk_score = Column(Float)
     primary_crime_type = Column(Text)
-    overall_risk_level = Column(Text)
+    overall_risk_level = Column(RiskLevelEnum)
     avg_risk_score = Column(Float)
     avg_confidence = Column(Float)
     summary_text = Column(Text, nullable=False)

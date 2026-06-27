@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 def _register_scheduler(app: FastAPI) -> None:
     from backend.core.scheduler.apscheduler_impl import APSchedulerBackend
     from backend.application.run_etl_pipeline import run_etl_pipeline
-    from backend.application.trigger_monitoring import trigger_monitoring
+    from backend.ml.monitoring.drift_detector import trigger_monitoring
     from backend.application.generate_report import generate_daily_report
 
     scheduler = APSchedulerBackend()

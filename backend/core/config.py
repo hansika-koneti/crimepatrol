@@ -6,7 +6,7 @@ Business logic must import from here, never from os.environ directly.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -143,6 +143,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @model_validator(mode="after")
+    def assemble_database_url(self) -> "Settings":
+        if self.postgres_host != "localhost" and "localhost" in self.database_url:
+            self.database_url = f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return self
 
 
 @lru_cache(maxsize=1)
